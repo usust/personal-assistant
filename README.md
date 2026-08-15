@@ -119,49 +119,55 @@ curl -I http://192.168.31.6:16100/
 该服务只负责前端文件，不依赖后端 `16101`。如果入口 Nginx 需要通过 `8000`
 提供同一个页面，应将它的上游设置为宿主机 `16100`。
 
-### 5. 通过 CI 部署后端 Docker 容器
+### 5. 通过 CI 部署后端可执行程序
 
-后端 workflow 会在代码推送到 `main` 且 `backend/**` 发生变化时，将源码同步到
-`192.168.31.5`，在目标 Docker 服务器原生构建镜像，并将服务发布到 `16101`。
-部署包含容器健康检查；新版本启动失败时会恢复上一个容器。
+后端 workflow 在本机 Mac self-hosted Runner 上运行测试，并使用 Zig 将依赖 CGO/SQLite
+的 Go 后端交叉编译为静态 Linux ARM64 可执行文件。随后 CI 将成品上传到
+`dok@192.168.31.5`，由 systemd 直接运行在 `16101`。`.5` 服务器不负责编译，也不使用
+Docker。新版本健康检查失败时，CI 会恢复上一个版本。
 
-首次使用前，需要在运行 self-hosted GitHub Runner 的机器上准备 SSH 私钥
-`/Users/lyu/.ssh/personal_assistant_backend`，并配置 `dok@192.168.31.5` 免密登录和
-`known_hosts`。CI 会通过 `-i` 显式使用该密钥。Docker 服务器上的 `dok` 用户必须有
-Docker 权限。
+Runner 使用以下私钥免密登录：
 
-在 GitHub 仓库中只需配置：
-
-- Secret `BACKEND_CONFIG_YAML`：正式后端配置，格式参考 `backend/config.example.yaml`，
-  且必须包含 `port: "16101"`，生产环境务必替换 `jwt_secret`。
-
-Docker 服务器上的部署用户需要有 Docker 权限，并能写入
-`/srv/docker/personal-assistant`。部署成功后可检查：
-
-```bash
-curl http://192.168.31.5:16101/api/health
+```text
+/Users/lyu/.ssh/personal_assistant_backend
 ```
 
-后端 systemd 服务名称为 `personal-assistant-backend.service`。首次部署成功、容器创建
-完成后，在 Docker 服务器安装并启用：
+GitHub 仓库需要配置 Secret `BACKEND_CONFIG_YAML`，内容参考
+`backend/config.example.yaml`，必须包含 `port: "16101"`，并替换正式 `jwt_secret`。
+
+在 `.5` 服务器一次性准备目录：
 
 ```bash
-sudo cp /srv/docker/personal-assistant/deploy/personal-assistant-backend.service \
-  /etc/systemd/system/personal-assistant-backend.service
-sudo systemctl daemon-reload
-sudo systemctl enable --now personal-assistant-backend.service
+sudo mkdir -p /srv/personal-assistant-backend
+sudo chown -R dok:dok /srv/personal-assistant-backend
 ```
 
-常用管理命令：
+systemd 服务名称为 `personal-assistant-backend.service`。将仓库内的 service 上传并安装：
+
+```bash
+scp -i /Users/lyu/.ssh/personal_assistant_backend \
+  deploy/backend/personal-assistant-backend.service \
+  dok@192.168.31.5:/tmp/personal-assistant-backend.service
+
+ssh -i /Users/lyu/.ssh/personal_assistant_backend dok@192.168.31.5 \
+  'sudo install -m 644 /tmp/personal-assistant-backend.service /etc/systemd/system/personal-assistant-backend.service && sudo systemctl daemon-reload && sudo systemctl enable personal-assistant-backend.service'
+```
+
+为了允许 CI 无密码重启这一项服务，用 `sudo visudo` 添加：
+
+```sudoers
+dok ALL=(root) NOPASSWD: /usr/bin/systemctl restart personal-assistant-backend.service
+```
+
+推送代码并完成首次 CI 后检查：
 
 ```bash
 sudo systemctl status personal-assistant-backend.service
-sudo systemctl reload personal-assistant-backend.service
-sudo systemctl stop personal-assistant-backend.service
+curl http://192.168.31.5:16101/api/health
 ```
 
-正式前端构建会直接使用 `http://192.168.31.5:16101/api`，因此还需要确保服务器
-防火墙允许 Web 用户访问 `16101`。
+正式前端构建使用 `http://192.168.31.5:16101/api`，需要确保服务器防火墙允许访问
+`16101`。
 
 ### 使用 Makefile 快速启动
 

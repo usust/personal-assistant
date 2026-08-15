@@ -19,19 +19,59 @@ concurrency:
 
 jobs:
   deploy:
-    name: Build backend on Docker server
+    name: Build on Mac and deploy Linux ARM64 binary
     runs-on: [self-hosted, macOS, ARM64]
     env:
       SERVER_HOST: 192.168.31.5
       SERVER_PORT: 16101
       SERVER_USER: dok
-      SERVER_ROOT: /srv/docker/personal-assistant
-      CONTAINER_NAME: personal-assistant-backend
+      SERVER_ROOT: /srv/personal-assistant-backend
+      SERVICE_NAME: personal-assistant-backend.service
       SSH_KEY_PATH: /Users/lyu/.ssh/personal_assistant_backend
 
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: backend/go.mod
+          cache-dependency-path: backend/go.sum
+
+      - name: Set up Linux ARM64 cross compiler
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! command -v zig >/dev/null 2>&1; then
+            brew install zig
+          fi
+          zig version
+
+      - name: Test backend on Mac
+        shell: bash
+        working-directory: backend
+        run: go test ./...
+
+      - name: Build Linux ARM64 executable
+        shell: bash
+        working-directory: backend
+        env:
+          CGO_ENABLED: "1"
+          GOOS: linux
+          GOARCH: arm64
+          CC: zig cc -target aarch64-linux-musl
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          go build \
+            -trimpath \
+            -ldflags='-s -w -linkmode external -extldflags "-static"' \
+            -o dist/personal-assistant-backend \
+            .
+          chmod 755 dist/personal-assistant-backend
+          file dist/personal-assistant-backend
+          file dist/personal-assistant-backend | grep -q 'ELF 64-bit.*ARM aarch64'
 
       - name: Validate deployment settings
         shell: bash
@@ -39,38 +79,37 @@ jobs:
           BACKEND_CONFIG_YAML: ${{ secrets.BACKEND_CONFIG_YAML }}
         run: |
           set -euo pipefail
-
           test -r "${SSH_KEY_PATH}" || { echo "SSH key is not readable: ${SSH_KEY_PATH}" >&2; exit 1; }
           test -n "${BACKEND_CONFIG_YAML}" || { echo "Secret BACKEND_CONFIG_YAML is required" >&2; exit 1; }
           printf '%s\n' "${BACKEND_CONFIG_YAML}" | grep -Eq '^port:[[:space:]]*"?16101"?[[:space:]]*$' || {
             echo "BACKEND_CONFIG_YAML must set port: 16101" >&2
             exit 1
           }
+          ssh -i "${SSH_KEY_PATH}" \
+            -o IdentitiesOnly=yes \
+            -o BatchMode=yes \
+            -o ConnectTimeout=10 \
+            -o StrictHostKeyChecking=yes \
+            "${SERVER_USER}@${SERVER_HOST}" \
+            "test \"\$(uname -m)\" = aarch64"
 
-          ssh -i "${SSH_KEY_PATH}" -o IdentitiesOnly=yes -o BatchMode=yes -o ConnectTimeout=10 -o StrictHostKeyChecking=yes \
-            "${SERVER_USER}@${SERVER_HOST}" "docker version >/dev/null"
-
-      - name: Upload source and runtime configuration
+      - name: Upload executable and configuration
         shell: bash
         env:
           BACKEND_CONFIG_YAML: ${{ secrets.BACKEND_CONFIG_YAML }}
         run: |
           set -euo pipefail
-
           release_id="${GITHUB_SHA:0:12}"
           remote_release="${SERVER_ROOT}/releases/${release_id}"
           ssh_options="-i ${SSH_KEY_PATH} -o IdentitiesOnly=yes -o BatchMode=yes -o ConnectTimeout=10 -o StrictHostKeyChecking=yes"
 
           ssh ${ssh_options} "${SERVER_USER}@${SERVER_HOST}" \
-            "mkdir -p '${remote_release}' '${SERVER_ROOT}/data' '${SERVER_ROOT}/log' '${SERVER_ROOT}/deploy'"
+            "mkdir -p '${remote_release}' '${SERVER_ROOT}/shared' '${SERVER_ROOT}/data' '${SERVER_ROOT}/log' '${SERVER_ROOT}/deploy'"
 
-          rsync -az --delete \
-            --exclude config.yaml \
-            --exclude data \
-            --exclude log \
+          rsync -az \
             -e "ssh ${ssh_options}" \
-            backend/ \
-            "${SERVER_USER}@${SERVER_HOST}:${remote_release}/"
+            backend/dist/personal-assistant-backend \
+            "${SERVER_USER}@${SERVER_HOST}:${remote_release}/personal-assistant-backend"
 
           rsync -az --delete \
             -e "ssh ${ssh_options}" \
@@ -78,84 +117,39 @@ jobs:
             "${SERVER_USER}@${SERVER_HOST}:${SERVER_ROOT}/deploy/"
 
           printf '%s\n' "${BACKEND_CONFIG_YAML}" | ssh ${ssh_options} "${SERVER_USER}@${SERVER_HOST}" \
-            "umask 077 && tee '${remote_release}/config.yaml' >/dev/null"
+            "umask 077 && tee '${SERVER_ROOT}/shared/config.yaml' >/dev/null"
 
-      - name: Build image and replace container
+      - name: Activate release
         shell: bash
         run: |
           set -euo pipefail
-
           release_id="${GITHUB_SHA:0:12}"
           remote_release="${SERVER_ROOT}/releases/${release_id}"
-          image_name="personal-assistant-backend:${release_id}"
           ssh_options="-i ${SSH_KEY_PATH} -o IdentitiesOnly=yes -o BatchMode=yes -o ConnectTimeout=10 -o StrictHostKeyChecking=yes"
 
-          ssh ${ssh_options} "${SERVER_USER}@${SERVER_HOST}" bash -s -- \
-            "${remote_release}" "${SERVER_ROOT}" "${SERVER_PORT}" "${CONTAINER_NAME}" "${image_name}" <<'REMOTE_SCRIPT'
-          set -euo pipefail
+          previous_release="$(ssh ${ssh_options} "${SERVER_USER}@${SERVER_HOST}" \
+            "readlink -f '${SERVER_ROOT}/current' 2>/dev/null || true")"
 
-          remote_release="$1"
-          server_root="$2"
-          server_port="$3"
-          container_name="$4"
-          image_name="$5"
-          previous_container="${container_name}-previous"
-
-          docker build --pull --tag "${image_name}" "${remote_release}"
-          docker rm -f "${previous_container}" >/dev/null 2>&1 || true
-
-          had_previous=false
-          if docker container inspect "${container_name}" >/dev/null 2>&1; then
-            had_previous=true
-            docker stop "${container_name}" >/dev/null
-            docker rename "${container_name}" "${previous_container}"
-          fi
-
-          deploy_uid="$(id -u)"
-          deploy_gid="$(id -g)"
-          if ! docker run --detach \
-            --name "${container_name}" \
-            --restart unless-stopped \
-            --user "${deploy_uid}:${deploy_gid}" \
-            --publish "${server_port}:${server_port}" \
-            --volume "${remote_release}/config.yaml:/app/config.yaml:ro" \
-            --volume "${server_root}/data:/app/data" \
-            --volume "${server_root}/log:/app/log" \
-            --label "deployment.sha=${image_name#*:}" \
-            "${image_name}" >/dev/null; then
-            docker rm -f "${container_name}" >/dev/null 2>&1 || true
-            if [[ "${had_previous}" == true ]]; then
-              docker rename "${previous_container}" "${container_name}"
-              docker start "${container_name}" >/dev/null
-            fi
-            exit 1
-          fi
+          ssh ${ssh_options} "${SERVER_USER}@${SERVER_HOST}" \
+            "chmod 755 '${remote_release}/personal-assistant-backend' && ln -sfnT '${remote_release}' '${SERVER_ROOT}/current' && sudo -n systemctl restart '${SERVICE_NAME}'"
 
           healthy=false
           for _ in $(seq 1 18); do
-            status="$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' "${container_name}")"
-            if [[ "${status}" == healthy ]]; then
+            if curl --fail --silent --max-time 3 \
+              "http://${SERVER_HOST}:${SERVER_PORT}/api/health" >/dev/null; then
               healthy=true
-              break
-            fi
-            if [[ "${status}" == unhealthy ]]; then
               break
             fi
             sleep 5
           done
 
           if [[ "${healthy}" != true ]]; then
-            docker logs --tail 100 "${container_name}" || true
-            docker rm -f "${container_name}" >/dev/null || true
-            if [[ "${had_previous}" == true ]]; then
-              docker rename "${previous_container}" "${container_name}"
-              docker start "${container_name}" >/dev/null
+            if [[ -n "${previous_release}" ]]; then
+              ssh ${ssh_options} "${SERVER_USER}@${SERVER_HOST}" \
+                "ln -sfnT '${previous_release}' '${SERVER_ROOT}/current' && sudo -n systemctl restart '${SERVICE_NAME}'"
             fi
-            echo "New backend container did not become healthy; previous container restored" >&2
+            echo "Backend health check failed; previous release restored" >&2
             exit 1
           fi
 
-          docker rm "${previous_container}" >/dev/null 2>&1 || true
-          ln -sfnT "${remote_release}" "${server_root}/current"
-          echo "Backend deployed: http://0.0.0.0:${server_port}/api"
-          REMOTE_SCRIPT
+          echo "Backend deployed: http://${SERVER_HOST}:${SERVER_PORT}/api"
