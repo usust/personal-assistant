@@ -9,7 +9,7 @@ export default defineConfig({
   },
   server: {
     host: '0.0.0.0',
-    port: 10080,
+    port: 16100,
     strictPort: true,
     proxy: {
       '/api': {
@@ -20,7 +20,7 @@ export default defineConfig({
   },
   preview: {
     host: '0.0.0.0',
-    port: 10080,
+    port: 16100,
     strictPort: true,
   },
 })

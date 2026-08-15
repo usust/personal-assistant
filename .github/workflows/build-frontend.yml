@@ -6,6 +6,7 @@ on:
       - main
     paths:
       - "frontend/**"
+      - "deploy/web/**"
       - ".github/workflows/build-frontend.yml"
   workflow_dispatch:
 
@@ -22,11 +23,10 @@ jobs:
     runs-on: [self-hosted, macOS, ARM64]
     env:
       WEB_HOST: 192.168.31.6
-      WEB_PORT: 10080
+      WEB_PORT: 16100
       WEB_USER: web
       WEB_ROOT: /srv/www/personal-assistant
       WEB_SSH_KEY: /Users/lyu/.ssh/personal_assistant_web
-      SERVER_PORT: 18000
     defaults:
       run:
         working-directory: frontend
@@ -48,7 +48,8 @@ jobs:
       - name: Build frontend
         run: npm run build
         env:
-          VITE_API_BASE_URL: http://${{ env.WEB_HOST }}:${{ env.SERVER_PORT }}/api
+          # 保留同源 API 路径；后端接入方式由入口层单独配置。
+          VITE_API_BASE_URL: /api
 
       - name: Upload frontend artifact
         uses: actions/upload-artifact@v4
@@ -68,15 +69,20 @@ jobs:
           ssh_options="-i ${WEB_SSH_KEY} -o BatchMode=yes -o ConnectTimeout=10 -o StrictHostKeyChecking=yes"
 
           ssh ${ssh_options} "${WEB_USER}@${WEB_HOST}" \
-            "mkdir -p '${remote_release}'"
+            "mkdir -p '${remote_release}' '${WEB_ROOT}/deploy'"
 
           rsync -az --delete \
             -e "ssh ${ssh_options}" \
             dist/ \
             "${WEB_USER}@${WEB_HOST}:${remote_release}/"
 
+          rsync -az --delete \
+            -e "ssh ${ssh_options}" \
+            ../deploy/web/ \
+            "${WEB_USER}@${WEB_HOST}:${WEB_ROOT}/deploy/"
+
           ssh ${ssh_options} "${WEB_USER}@${WEB_HOST}" \
             "test -f '${remote_release}/index.html' && ln -sfnT '${remote_release}' '${WEB_ROOT}/current'"
 
           echo "Deployed ${GITHUB_SHA} to ${WEB_USER}@${WEB_HOST}:${remote_release}"
-          echo "Web: http://${WEB_HOST}:${WEB_PORT}; API: http://${WEB_HOST}:${SERVER_PORT}/api"
+          echo "Web: http://${WEB_HOST}:${WEB_PORT}"

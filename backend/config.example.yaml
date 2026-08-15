@@ -28,8 +28,8 @@ jwt_expire_hours: 24
 
 # Web origins allowed to call the API.
 allowed_origins:
-  - http://localhost:10080
-  - http://192.168.31.6:10080
+  - http://localhost:16100
+  - http://192.168.31.6:16100
 
 zap_log:
   log_dir: log

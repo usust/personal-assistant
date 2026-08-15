@@ -86,7 +86,38 @@ cd frontend
 npm run dev
 ```
 
-访问 `http://localhost:10080`。开发服务器会把 `/api` 请求代理到 `http://localhost:18000` 的后端。
+访问 `http://localhost:16100`。开发服务器会把 `/api` 请求代理到 `http://localhost:18000` 的后端。
+
+### 4. 部署 Web 服务
+
+生产环境不需要常驻 Vite。前端 workflow 会把构建结果发布到
+`/srv/www/personal-assistant/current`，宿主机上的独立 Web 服务负责在 `16100`
+端口提供静态页面。Docker 中监听 `8000` 的入口 Nginx 是另一个服务，可以按需
+反向代理到宿主机的 `16100`。
+
+首次部署或 Web 服务配置发生变化时，在服务器执行：
+
+```bash
+sudo cp /srv/www/personal-assistant/deploy/personal-assistant-web.service \
+  /etc/systemd/system/personal-assistant-web.service
+sudo systemctl daemon-reload
+sudo systemctl enable --now personal-assistant-web.service
+```
+
+随后只需访问：
+
+```text
+http://192.168.31.6:16100
+```
+
+可以用下面的地址检查宿主机 Web 服务：
+
+```bash
+curl -I http://192.168.31.6:16100/
+```
+
+该服务只负责前端文件，不依赖后端 `18000`。如果入口 Nginx 需要通过 `8000`
+提供同一个页面，应将它的上游设置为宿主机 `16100`。
 
 ### 使用 Makefile 快速启动
 
