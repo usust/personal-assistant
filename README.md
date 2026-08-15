@@ -142,6 +142,24 @@ Docker 服务器上的部署用户需要有 Docker 权限，并能写入
 curl http://192.168.31.5:16101/api/health
 ```
 
+后端 systemd 服务名称为 `personal-assistant-backend.service`。首次部署成功、容器创建
+完成后，在 Docker 服务器安装并启用：
+
+```bash
+sudo cp /srv/docker/personal-assistant/deploy/personal-assistant-backend.service \
+  /etc/systemd/system/personal-assistant-backend.service
+sudo systemctl daemon-reload
+sudo systemctl enable --now personal-assistant-backend.service
+```
+
+常用管理命令：
+
+```bash
+sudo systemctl status personal-assistant-backend.service
+sudo systemctl reload personal-assistant-backend.service
+sudo systemctl stop personal-assistant-backend.service
+```
+
 正式前端构建会直接使用 `http://192.168.31.5:16101/api`，因此还需要确保服务器
 防火墙允许 Web 用户访问 `16101`。
 

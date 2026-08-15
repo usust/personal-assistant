@@ -6,6 +6,7 @@ on:
       - main
     paths:
       - "backend/**"
+      - "deploy/backend/**"
       - ".github/workflows/deploy-backend.yml"
   workflow_dispatch:
 
@@ -61,7 +62,7 @@ jobs:
           ssh_options="-i ${SSH_KEY_PATH} -o IdentitiesOnly=yes -o BatchMode=yes -o ConnectTimeout=10 -o StrictHostKeyChecking=yes"
 
           ssh ${ssh_options} "${SERVER_USER}@${SERVER_HOST}" \
-            "mkdir -p '${remote_release}' '${SERVER_ROOT}/data' '${SERVER_ROOT}/log'"
+            "mkdir -p '${remote_release}' '${SERVER_ROOT}/data' '${SERVER_ROOT}/log' '${SERVER_ROOT}/deploy'"
 
           rsync -az --delete \
             --exclude config.yaml \
@@ -70,6 +71,11 @@ jobs:
             -e "ssh ${ssh_options}" \
             backend/ \
             "${SERVER_USER}@${SERVER_HOST}:${remote_release}/"
+
+          rsync -az --delete \
+            -e "ssh ${ssh_options}" \
+            deploy/backend/ \
+            "${SERVER_USER}@${SERVER_HOST}:${SERVER_ROOT}/deploy/"
 
           printf '%s\n' "${BACKEND_CONFIG_YAML}" | ssh ${ssh_options} "${SERVER_USER}@${SERVER_HOST}" \
             "umask 077 && tee '${remote_release}/config.yaml' >/dev/null"
