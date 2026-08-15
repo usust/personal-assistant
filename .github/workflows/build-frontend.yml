@@ -22,7 +22,7 @@ jobs:
     runs-on: [self-hosted, macOS, ARM64]
     env:
       WEB_HOST: 192.168.31.6
-      WEB_PORT: 8000
+      WEB_PORT: 10080
       WEB_USER: web
       WEB_ROOT: /srv/www/personal-assistant
       WEB_SSH_KEY: /Users/lyu/.ssh/personal_assistant_web

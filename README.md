@@ -86,7 +86,7 @@ cd frontend
 npm run dev
 ```
 
-访问 `http://localhost:8000`。开发服务器会把 `/api` 请求代理到 `http://localhost:18000` 的后端。
+访问 `http://localhost:10080`。开发服务器会把 `/api` 请求代理到 `http://localhost:18000` 的后端。
 
 ### 使用 Makefile 快速启动
 
