@@ -66,7 +66,7 @@ cd backend
 go run .
 ```
 
-后端默认读取当前目录下的 `config.yaml`，监听 `http://localhost:18000`。首次启动会在 `backend/data/` 创建 SQLite 数据库，并在 `backend/log/` 生成按等级拆分和轮转的 Zap 日志。
+后端默认读取当前目录下的 `config.yaml`，监听 `http://localhost:16101`。首次启动会在 `backend/data/` 创建 SQLite 数据库，并在 `backend/log/` 生成按等级拆分和轮转的 Zap 日志。
 
 部署时可用 `EXPORT_CONFIG_FILE` 指定其他配置文件，无需复制为默认文件名：
 
@@ -86,7 +86,7 @@ cd frontend
 npm run dev
 ```
 
-访问 `http://localhost:16100`。开发服务器会把 `/api` 请求代理到 `http://localhost:18000` 的后端。
+访问 `http://localhost:16100`。开发服务器会把 `/api` 请求代理到 `http://localhost:16101` 的后端。
 
 ### 4. 部署 Web 服务
 
@@ -116,8 +116,34 @@ http://192.168.31.6:16100
 curl -I http://192.168.31.6:16100/
 ```
 
-该服务只负责前端文件，不依赖后端 `18000`。如果入口 Nginx 需要通过 `8000`
+该服务只负责前端文件，不依赖后端 `16101`。如果入口 Nginx 需要通过 `8000`
 提供同一个页面，应将它的上游设置为宿主机 `16100`。
+
+### 5. 通过 CI 部署后端 Docker 容器
+
+后端 workflow 会在代码推送到 `main` 且 `backend/**` 发生变化时，将源码同步到
+`192.168.31.5`，在目标 Docker 服务器原生构建镜像，并将服务发布到 `16101`。
+部署包含容器健康检查；新版本启动失败时会恢复上一个容器。
+
+首次使用前，需要在运行 self-hosted GitHub Runner 的机器上准备 SSH 私钥
+`/Users/lyu/.ssh/personal_assistant_backend`，并配置 `dok@192.168.31.5` 免密登录和
+`known_hosts`。CI 会通过 `-i` 显式使用该密钥。Docker 服务器上的 `dok` 用户必须有
+Docker 权限。
+
+在 GitHub 仓库中只需配置：
+
+- Secret `BACKEND_CONFIG_YAML`：正式后端配置，格式参考 `backend/config.example.yaml`，
+  且必须包含 `port: "16101"`，生产环境务必替换 `jwt_secret`。
+
+Docker 服务器上的部署用户需要有 Docker 权限，并能写入
+`/srv/docker/personal-assistant`。部署成功后可检查：
+
+```bash
+curl http://192.168.31.5:16101/api/health
+```
+
+正式前端构建会直接使用 `http://192.168.31.5:16101/api`，因此还需要确保服务器
+防火墙允许 Web 用户访问 `16101`。
 
 ### 使用 Makefile 快速启动
 
@@ -165,13 +191,13 @@ make dev-frontend
 登录前先请求验证码：
 
 ```bash
-curl http://localhost:18000/api/captcha
+curl http://localhost:16101/api/captcha
 ```
 
 响应中的 `data.captchaId` 和 `data.image` 分别用于关联验证码及展示验证码图片。识别图片内容后，将验证码 ID 和输入内容随登录请求一并提交：
 
 ```bash
-curl -X POST http://localhost:18000/api/login \
+curl -X POST http://localhost:16101/api/login \
   -H 'Content-Type: application/json' \
   -d '{"username":"admin","password":"123456","captchaId":"验证码ID","captchaCode":"图片中的验证码"}'
 ```

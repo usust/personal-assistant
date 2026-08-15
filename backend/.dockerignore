@@ -1,0 +1,13 @@
+.DS_Store
+config.yaml
+data/
+log/
+build/
+dist/
+coverage/
+coverage.out
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite3

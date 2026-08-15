@@ -24,6 +24,8 @@ jobs:
     env:
       WEB_HOST: 192.168.31.6
       WEB_PORT: 16100
+      API_HOST: 192.168.31.5
+      API_PORT: 16101
       WEB_USER: web
       WEB_ROOT: /srv/www/personal-assistant
       WEB_SSH_KEY: /Users/lyu/.ssh/personal_assistant_web
@@ -48,8 +50,7 @@ jobs:
       - name: Build frontend
         run: npm run build
         env:
-          # 保留同源 API 路径；后端接入方式由入口层单独配置。
-          VITE_API_BASE_URL: /api
+          VITE_API_BASE_URL: http://${{ env.API_HOST }}:${{ env.API_PORT }}/api
 
       - name: Upload frontend artifact
         uses: actions/upload-artifact@v4
@@ -86,3 +87,4 @@ jobs:
 
           echo "Deployed ${GITHUB_SHA} to ${WEB_USER}@${WEB_HOST}:${remote_release}"
           echo "Web: http://${WEB_HOST}:${WEB_PORT}"
+          echo "API: http://${API_HOST}:${API_PORT}/api"
