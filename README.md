@@ -119,6 +119,34 @@ curl -I http://192.168.31.6:16100/
 该服务只负责前端文件，不依赖后端 `16101`。如果入口 Nginx 需要通过 `8000`
 提供同一个页面，应将它的上游设置为宿主机 `16100`。
 
+正式环境使用同一个域名 `lylab.vip`：公网 DNS 将它解析到公网入口；需要在内网直连的
+客户端则通过 hosts 将它覆盖为 `192.168.31.6`。前端正式构建使用同源 `/api`，Nginx
+负责将页面请求转发到 Web `16100`，并将 `/api/` 转发到后端 `192.168.31.5:16101`。
+macOS/Linux 的 `/etc/hosts` 可添加：
+
+```text
+192.168.31.6 lylab.vip person.lylab.vip
+```
+
+hosts 覆盖不会根据当前网络自动切换；设备离开内网后，需要注释或删除该条目，才能恢复
+使用公网 DNS。
+配置模板会随前端发布到：
+
+```text
+/srv/www/personal-assistant/deploy/personal-assistant.nginx.conf
+```
+
+将其安装到 Nginx 后检查并重载：
+
+```bash
+nginx -t
+nginx -s reload
+```
+
+如果 Nginx 运行在 Docker 中，需要把该配置挂载到容器的 `/etc/nginx/conf.d/`，并将
+宿主机标准端口 `80`（以及启用 HTTPS 后的 `443`）映射到容器。DNS 只能映射 IP，不能
+把内网访问的 `80` 自动改成 `8000`。
+
 ### 5. 通过 CI 部署后端可执行程序
 
 后端 workflow 在本机 Mac self-hosted Runner 上运行测试，并使用 Zig 将依赖 CGO/SQLite
