@@ -66,7 +66,7 @@ cd backend
 go run .
 ```
 
-后端默认读取当前目录下的 `config.yaml`，监听 `http://localhost:8000`。首次启动会在 `backend/data/` 创建 SQLite 数据库，并在 `backend/log/` 生成按等级拆分和轮转的 Zap 日志。
+后端默认读取当前目录下的 `config.yaml`，监听 `http://localhost:18000`。首次启动会在 `backend/data/` 创建 SQLite 数据库，并在 `backend/log/` 生成按等级拆分和轮转的 Zap 日志。
 
 部署时可用 `EXPORT_CONFIG_FILE` 指定其他配置文件，无需复制为默认文件名：
 
@@ -86,7 +86,7 @@ cd frontend
 npm run dev
 ```
 
-访问 `http://localhost:5173`。开发服务器会把 `/api` 请求代理到后端。
+访问 `http://localhost:8000`。开发服务器会把 `/api` 请求代理到 `http://localhost:18000` 的后端。
 
 ### 使用 Makefile 快速启动
 
@@ -134,13 +134,13 @@ make dev-frontend
 登录前先请求验证码：
 
 ```bash
-curl http://localhost:8000/api/captcha
+curl http://localhost:18000/api/captcha
 ```
 
 响应中的 `data.captchaId` 和 `data.image` 分别用于关联验证码及展示验证码图片。识别图片内容后，将验证码 ID 和输入内容随登录请求一并提交：
 
 ```bash
-curl -X POST http://localhost:8000/api/login \
+curl -X POST http://localhost:18000/api/login \
   -H 'Content-Type: application/json' \
   -d '{"username":"admin","password":"123456","captchaId":"验证码ID","captchaCode":"图片中的验证码"}'
 ```

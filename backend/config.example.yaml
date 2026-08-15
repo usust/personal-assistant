@@ -1,0 +1,40 @@
+# HTTP server
+host: 0.0.0.0
+port: "18000"
+mode: release
+
+database:
+  active: sqlite
+
+database_connections:
+  sqlite:
+    driver: sqlite
+    path: data/personal-assistant.db
+  mysql:
+    driver: mysql
+    host: 127.0.0.1
+    port: 3306
+    username: personal_assistant
+    password: replace-with-database-password
+    name: personal_assistant
+    charset: utf8mb4
+  test_memory:
+    driver: sqlite
+    path: ":memory:"
+
+# Replace this value before a production deployment.
+jwt_secret: replace-this-with-a-long-random-secret
+jwt_expire_hours: 24
+
+# Web origins allowed to call the API.
+allowed_origins:
+  - http://localhost:8000
+  - http://192.168.31.6:8000
+
+zap_log:
+  log_dir: log
+  log_level: info
+  max_size: 10
+  max_backups: 30
+  max_age: 180
+  iscompress: true
