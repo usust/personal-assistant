@@ -1,0 +1,57 @@
+# Operating system files
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Editors and IDEs
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Local environment files (keep shareable examples)
+.env
+.env.*
+!.env.example
+!.env.*.example
+
+# Logs
+*.log
+logs/
+
+# Frontend (Node.js / Vite)
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+frontend/.cache/
+frontend/coverage/
+frontend/*.tsbuildinfo
+frontend/npm-debug.log*
+frontend/yarn-debug.log*
+frontend/yarn-error.log*
+frontend/pnpm-debug.log*
+
+# Backend (Go)
+backend/bin/
+backend/build/
+backend/dist/
+backend/.tmp-go-cache/
+backend/vendor/
+backend/coverage/
+backend/coverage.out
+backend/*.test
+backend/*.prof
+backend/*.pprof
+
+# Backend runtime data and local configuration
+backend/data/
+backend/log/
+backend/config.yaml
+backend/*.db
+backend/*.db-shm
+backend/*.db-wal
+backend/*.sqlite
+backend/*.sqlite3
+
+**/*_test.go
