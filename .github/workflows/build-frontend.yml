@@ -12,10 +12,19 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: personal-assistant-frontend-production
+  cancel-in-progress: false
+
 jobs:
   build:
-    name: Build Vue frontend on MacBook M2
+    name: Build and deploy Vue frontend on MacBook M2
     runs-on: [self-hosted, macOS, ARM64]
+    env:
+      WEB_HOST: 192.168.31.6
+      WEB_USER: web
+      WEB_ROOT: /srv/www/personal-assistant
+      WEB_SSH_KEY: /Users/lyu/.ssh/personal_assistant_web
     defaults:
       run:
         working-directory: frontend
@@ -46,3 +55,25 @@ jobs:
           path: frontend/dist
           if-no-files-found: error
           retention-days: 14
+
+      - name: Deploy frontend to web server
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          release_id="${GITHUB_SHA:0:12}"
+          remote_release="${WEB_ROOT}/releases/${release_id}"
+          ssh_options="-i ${WEB_SSH_KEY} -o BatchMode=yes -o ConnectTimeout=10 -o StrictHostKeyChecking=yes"
+
+          ssh ${ssh_options} "${WEB_USER}@${WEB_HOST}" \
+            "mkdir -p '${remote_release}'"
+
+          rsync -az --delete \
+            -e "ssh ${ssh_options}" \
+            dist/ \
+            "${WEB_USER}@${WEB_HOST}:${remote_release}/"
+
+          ssh ${ssh_options} "${WEB_USER}@${WEB_HOST}" \
+            "test -f '${remote_release}/index.html' && ln -sfnT '${remote_release}' '${WEB_ROOT}/current'"
+
+          echo "Deployed ${GITHUB_SHA} to ${WEB_USER}@${WEB_HOST}:${remote_release}"
