@@ -75,14 +75,11 @@ jobs:
 
       - name: Validate deployment settings
         shell: bash
-        env:
-          BACKEND_CONFIG_YAML: ${{ secrets.BACKEND_CONFIG_YAML }}
         run: |
           set -euo pipefail
           test -r "${SSH_KEY_PATH}" || { echo "SSH key is not readable: ${SSH_KEY_PATH}" >&2; exit 1; }
-          test -n "${BACKEND_CONFIG_YAML}" || { echo "Secret BACKEND_CONFIG_YAML is required" >&2; exit 1; }
-          printf '%s\n' "${BACKEND_CONFIG_YAML}" | grep -Eq '^port:[[:space:]]*"?16101"?[[:space:]]*$' || {
-            echo "BACKEND_CONFIG_YAML must set port: 16101" >&2
+          grep -Eq '^port:[[:space:]]*"?16101"?[[:space:]]*$' backend/config.example.yaml || {
+            echo "backend/config.example.yaml must set port: 16101" >&2
             exit 1
           }
           ssh -i "${SSH_KEY_PATH}" \
@@ -95,8 +92,6 @@ jobs:
 
       - name: Upload executable and configuration
         shell: bash
-        env:
-          BACKEND_CONFIG_YAML: ${{ secrets.BACKEND_CONFIG_YAML }}
         run: |
           set -euo pipefail
           release_id="${GITHUB_SHA:0:12}"
@@ -111,13 +106,18 @@ jobs:
             backend/dist/personal-assistant-backend \
             "${SERVER_USER}@${SERVER_HOST}:${remote_release}/personal-assistant-backend"
 
+          rsync -az \
+            -e "ssh ${ssh_options}" \
+            backend/config.example.yaml \
+            "${SERVER_USER}@${SERVER_HOST}:${remote_release}/config.yaml"
+
           rsync -az --delete \
             -e "ssh ${ssh_options}" \
             deploy/backend/ \
             "${SERVER_USER}@${SERVER_HOST}:${SERVER_ROOT}/deploy/"
 
-          printf '%s\n' "${BACKEND_CONFIG_YAML}" | ssh ${ssh_options} "${SERVER_USER}@${SERVER_HOST}" \
-            "umask 077 && tee '${SERVER_ROOT}/shared/config.yaml' >/dev/null"
+          ssh ${ssh_options} "${SERVER_USER}@${SERVER_HOST}" \
+            "if [ ! -f '${SERVER_ROOT}/shared/config.yaml' ]; then umask 077 && cp '${remote_release}/config.yaml' '${SERVER_ROOT}/shared/config.yaml'; fi"
 
       - name: Activate release
         shell: bash

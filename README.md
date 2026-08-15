@@ -132,8 +132,9 @@ Runner 使用以下私钥免密登录：
 /Users/lyu/.ssh/personal_assistant_backend
 ```
 
-GitHub 仓库需要配置 Secret `BACKEND_CONFIG_YAML`，内容参考
-`backend/config.example.yaml`，必须包含 `port: "16101"`，并替换正式 `jwt_secret`。
+当前 CI 不依赖 GitHub Secret。首次部署时会将 `backend/config.example.yaml` 复制到
+`/srv/personal-assistant-backend/shared/config.yaml`；后续部署不会覆盖服务器上的该文件。
+此配置中的 `jwt_secret` 仅为临时占位值，正式使用前应直接在服务器上替换。
 
 在 `.5` 服务器一次性准备目录：
 
