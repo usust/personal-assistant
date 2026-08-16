@@ -18,17 +18,9 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  deploy:
-    name: Build on Mac and deploy Linux ARM64 binary
+  build:
+    name: Build and test Linux ARM64 binary
     runs-on: [self-hosted, macOS, ARM64]
-    env:
-      SERVER_HOST: 192.168.31.5
-      SERVER_PORT: 16101
-      SERVER_USER: dok
-      SERVER_ROOT: /srv/personal-assistant-backend
-      SERVICE_NAME: personal-assistant-backend.service
-      SSH_KEY_PATH: /Users/lyu/.ssh/personal_assistant_backend
-
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
@@ -63,6 +55,36 @@ jobs:
           file dist/personal-assistant-backend
           file dist/personal-assistant-backend | grep -q 'ELF 64-bit.*ARM aarch64'
 
+      - name: Upload compiled binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: personal-assistant-backend-linux-arm64
+          path: backend/dist/personal-assistant-backend
+          if-no-files-found: error
+          retention-days: 3
+
+  deploy:
+    name: Deploy and verify backend service
+    needs: build
+    runs-on: [self-hosted, macOS, ARM64]
+    env:
+      SERVER_HOST: 192.168.31.5
+      SERVER_PORT: 16101
+      SERVER_USER: dok
+      SERVER_ROOT: /srv/personal-assistant-backend
+      SERVICE_NAME: personal-assistant-backend.service
+      SSH_KEY_PATH: /Users/lyu/.ssh/personal_assistant_backend
+
+    steps:
+      - name: Check out deployment files
+        uses: actions/checkout@v4
+
+      - name: Download compiled binary
+        uses: actions/download-artifact@v4
+        with:
+          name: personal-assistant-backend-linux-arm64
+          path: backend/dist
+
       - name: Validate deployment settings
         shell: bash
         run: |
@@ -79,6 +101,59 @@ jobs:
             -o StrictHostKeyChecking=yes \
             "${SERVER_USER}@${SERVER_HOST}" \
             "test \"\$(uname -m)\" = aarch64"
+
+      - name: Validate remote MySQL runtime configuration
+        shell: bash
+        run: |
+          set -euo pipefail
+          ssh_options="-i ${SSH_KEY_PATH} -o IdentitiesOnly=yes -o BatchMode=yes -o ConnectTimeout=10 -o StrictHostKeyChecking=yes"
+
+          ssh ${ssh_options} "${SERVER_USER}@${SERVER_HOST}" \
+            "SERVER_ROOT='${SERVER_ROOT}' bash -s" <<'REMOTE_CHECK'
+          set -euo pipefail
+          config_file="${SERVER_ROOT}/shared/config.yaml"
+
+          if [[ ! -r "${config_file}" ]]; then
+            echo "Remote runtime configuration is not readable: ${config_file}" >&2
+            exit 1
+          fi
+
+          active_database="$(awk '
+            /^database:[[:space:]]*$/ { in_database = 1; next }
+            in_database && /^[^[:space:]]/ { in_database = 0 }
+            in_database && /^[[:space:]]+active:/ { print $2; exit }
+          ' "${config_file}")"
+          if [[ "${active_database}" != "mysql" ]]; then
+            echo "Remote runtime configuration is not ready: database.active=${active_database:-<missing>}; expected mysql" >&2
+            exit 1
+          fi
+
+          if grep -Eq '^[[:space:]]*password:[[:space:]]*(replace-with-database-password)?[[:space:]]*$' "${config_file}"; then
+            echo "Remote MySQL password is empty or still uses the example placeholder" >&2
+            exit 1
+          fi
+
+          mysql_host="$(awk '
+            /^[[:space:]]{2}mysql:[[:space:]]*$/ { in_mysql = 1; next }
+            in_mysql && /^[[:space:]]{2}[^[:space:]][^:]*:/ { exit }
+            in_mysql && /^[[:space:]]{4}host:/ { print $2; exit }
+          ' "${config_file}")"
+          mysql_port="$(awk '
+            /^[[:space:]]{2}mysql:[[:space:]]*$/ { in_mysql = 1; next }
+            in_mysql && /^[[:space:]]{2}[^[:space:]][^:]*:/ { exit }
+            in_mysql && /^[[:space:]]{4}port:/ { gsub(/\"/, "", $2); print $2; exit }
+          ' "${config_file}")"
+          if [[ -z "${mysql_host}" || -z "${mysql_port}" ]]; then
+            echo "Remote MySQL host or port is missing" >&2
+            exit 1
+          fi
+          if ! timeout 3 bash -c "</dev/tcp/${mysql_host}/${mysql_port}" 2>/dev/null; then
+            echo "Remote MySQL endpoint is unreachable from the backend server: ${mysql_host}:${mysql_port}" >&2
+            exit 1
+          fi
+
+          echo "Remote MySQL runtime configuration is ready: ${mysql_host}:${mysql_port}"
+          REMOTE_CHECK
 
       - name: Upload executable and configuration
         shell: bash
@@ -134,11 +209,15 @@ jobs:
           done
 
           if [[ "${healthy}" != true ]]; then
+            echo "::error::New backend process did not pass /api/health; collecting remote runtime logs before rollback"
+            ssh ${ssh_options} "${SERVER_USER}@${SERVER_HOST}" \
+              "systemctl status '${SERVICE_NAME}' --no-pager -l || true; journalctl -u '${SERVICE_NAME}' --since '5 minutes ago' --no-pager -n 200 || true"
+
             if [[ -n "${previous_release}" ]]; then
               ssh ${ssh_options} "${SERVER_USER}@${SERVER_HOST}" \
                 "ln -sfnT '${previous_release}' '${SERVER_ROOT}/current' && sudo -n systemctl restart '${SERVICE_NAME}'"
             fi
-            echo "Backend health check failed; previous release restored" >&2
+            echo "Backend runtime health check failed; previous release restored" >&2
             exit 1
           fi
 
