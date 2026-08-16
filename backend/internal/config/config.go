@@ -60,11 +60,9 @@ type DatabaseConfig struct {
 	Active string `mapstructure:"active"` // 当前启用的连接名称
 }
 
-// DatabaseConnectionConfig 定义单个 SQLite 或 MySQL 数据库的连接参数。
-// Driver 决定实际使用哪一组字段，未被选择的连接不会参与参数校验或建立连接。
+// DatabaseConnectionConfig 定义单个 MySQL 数据库的连接参数。
 type DatabaseConnectionConfig struct {
-	Driver   string `mapstructure:"driver"`   // 数据库驱动，可选 sqlite 或 mysql
-	Path     string `mapstructure:"path"`     // SQLite 数据库文件路径
+	Driver   string `mapstructure:"driver"`   // 数据库驱动，固定为 mysql
 	Host     string `mapstructure:"host"`     // MySQL 服务器地址
 	Port     int    `mapstructure:"port"`     // MySQL 服务端口
 	Username string `mapstructure:"username"` // MySQL 登录用户名
@@ -94,10 +92,9 @@ func (c *Config) ActiveDatabaseConnection() (string, DatabaseConnectionConfig, e
 	return active, connection, nil
 }
 
-// validate 校验并规范化单个数据库连接配置。
+// validate 校验并规范化单个 MySQL 数据库连接配置。
 //
-// 该方法仅由当前启用的连接调用，并根据所选驱动规范化相关字符串字段；
-// MySQL 连接未设置字符集时，将默认使用 utf8mb4。
+// 该方法仅由当前启用的连接调用；连接未设置字符集时，将默认使用 utf8mb4。
 //
 // 参数：
 //   - c：待校验和规范化的数据库连接配置，必须为非 nil 指针。
@@ -106,34 +103,27 @@ func (c *Config) ActiveDatabaseConnection() (string, DatabaseConnectionConfig, e
 //   - error：驱动不受支持或所选驱动的必要参数无效时返回错误；校验通过时返回 nil。
 func (c *DatabaseConnectionConfig) validate() error {
 	c.Driver = strings.ToLower(strings.TrimSpace(c.Driver))
-	switch c.Driver {
-	case "sqlite":
-		c.Path = strings.TrimSpace(c.Path)
-		if c.Path == "" {
-			return fmt.Errorf("path must not be empty when driver is sqlite")
-		}
-	case "mysql":
-		c.Host = strings.TrimSpace(c.Host)
-		c.Username = strings.TrimSpace(c.Username)
-		c.Name = strings.TrimSpace(c.Name)
-		c.Charset = strings.TrimSpace(c.Charset)
-		if c.Host == "" {
-			return fmt.Errorf("host must not be empty when driver is mysql")
-		}
-		if c.Port <= 0 || c.Port > 65535 {
-			return fmt.Errorf("port must be between 1 and 65535 when driver is mysql")
-		}
-		if c.Username == "" {
-			return fmt.Errorf("username must not be empty when driver is mysql")
-		}
-		if c.Name == "" {
-			return fmt.Errorf("name must not be empty when driver is mysql")
-		}
-		if c.Charset == "" {
-			c.Charset = "utf8mb4"
-		}
-	default:
-		return fmt.Errorf("driver must be sqlite or mysql")
+	if c.Driver != "mysql" {
+		return fmt.Errorf("driver must be mysql")
+	}
+	c.Host = strings.TrimSpace(c.Host)
+	c.Username = strings.TrimSpace(c.Username)
+	c.Name = strings.TrimSpace(c.Name)
+	c.Charset = strings.TrimSpace(c.Charset)
+	if c.Host == "" {
+		return fmt.Errorf("host must not be empty")
+	}
+	if c.Port <= 0 || c.Port > 65535 {
+		return fmt.Errorf("port must be between 1 and 65535")
+	}
+	if c.Username == "" {
+		return fmt.Errorf("username must not be empty")
+	}
+	if c.Name == "" {
+		return fmt.Errorf("name must not be empty")
+	}
+	if c.Charset == "" {
+		c.Charset = "utf8mb4"
 	}
 	return nil
 }

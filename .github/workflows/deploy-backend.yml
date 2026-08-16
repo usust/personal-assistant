@@ -39,15 +39,6 @@ jobs:
           go-version-file: backend/go.mod
           cache-dependency-path: backend/go.sum
 
-      - name: Set up Linux ARM64 cross compiler
-        shell: bash
-        run: |
-          set -euo pipefail
-          if ! command -v zig >/dev/null 2>&1; then
-            brew install zig
-          fi
-          zig version
-
       - name: Test backend on Mac
         shell: bash
         working-directory: backend
@@ -57,16 +48,15 @@ jobs:
         shell: bash
         working-directory: backend
         env:
-          CGO_ENABLED: "1"
+          CGO_ENABLED: "0"
           GOOS: linux
           GOARCH: arm64
-          CC: zig cc -target aarch64-linux-musl
         run: |
           set -euo pipefail
           mkdir -p dist
           go build \
             -trimpath \
-            -ldflags='-s -w -linkmode external -extldflags "-static"' \
+            -ldflags='-s -w' \
             -o dist/personal-assistant-backend \
             .
           chmod 755 dist/personal-assistant-backend
@@ -99,7 +89,7 @@ jobs:
           ssh_options="-i ${SSH_KEY_PATH} -o IdentitiesOnly=yes -o BatchMode=yes -o ConnectTimeout=10 -o StrictHostKeyChecking=yes"
 
           ssh ${ssh_options} "${SERVER_USER}@${SERVER_HOST}" \
-            "mkdir -p '${remote_release}' '${SERVER_ROOT}/shared' '${SERVER_ROOT}/data' '${SERVER_ROOT}/log' '${SERVER_ROOT}/deploy'"
+            "mkdir -p '${remote_release}' '${SERVER_ROOT}/shared' '${SERVER_ROOT}/log' '${SERVER_ROOT}/deploy'"
 
           rsync -az \
             -e "ssh ${ssh_options}" \

@@ -80,7 +80,6 @@ func bootstrap() (*gorm.DB, error) {
 		"数据存储配置加载完成",
 		"连接名称", connectionName,
 		"数据库驱动", connectionConfig.Driver,
-		"文件路径", connectionConfig.Path,
 		"服务器地址", connectionConfig.Host,
 		"服务端口", connectionConfig.Port,
 		"数据库名称", connectionConfig.Name,

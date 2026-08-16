@@ -13,17 +13,10 @@ import (
 	"personal_assistant_server/internal/task"
 )
 
-// Connect 根据配置中选择的驱动连接 SQLite 或 MySQL。
-// 参数 cfg 包含数据库驱动及对应连接信息；返回已建立的 GORM 数据库连接和连接错误。
+// Connect 根据配置创建 MySQL 数据库连接。
+// 参数 cfg 包含 MySQL 连接信息；返回已建立的 GORM 数据库连接和连接错误。
 func Connect(cfg config.DatabaseConnectionConfig) (*gorm.DB, error) {
-	switch cfg.Driver {
-	case "sqlite":
-		return connectSQLite(cfg.Path)
-	case "mysql":
-		return connectMySQL(cfg)
-	default:
-		return nil, fmt.Errorf("unsupported database driver %q", cfg.Driver)
-	}
+	return connectMySQL(cfg)
 }
 
 // MigrateAndSeed 创建数据库表结构，并在管理员账户不存在时写入初始账户。

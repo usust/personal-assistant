@@ -5,7 +5,7 @@
 ## 技术栈
 
 - 前端：Vue 3、TypeScript、Vite、Vue Router、Pinia、Element Plus、Axios
-- 后端：Go、Gin、GORM、SQLite、JWT、bcrypt、内置配置及日志工具（Viper + Zap）
+- 后端：Go、Gin、GORM、MySQL、JWT、bcrypt、内置配置及日志工具（Viper + Zap）
 - 默认账号：`admin`
 - 默认密码：`123456`
 
@@ -36,7 +36,7 @@
 
 ## 运行命令
 
-需要 Node.js 20+、npm 和 Go 1.26.2+。
+需要 Node.js 20+、npm、Go 1.26.2+ 和 MySQL 8.0+。
 
 以下命令均在项目根目录 `PersonalAssistant` 下执行。
 
@@ -52,6 +52,7 @@ cp .env.example .env.local
 cd ../backend
 go mod download
 cp config.example.yaml config.yaml
+# 编辑 config.yaml，填写可用的 MySQL 地址、账号、密码和数据库名
 
 # 返回项目根目录
 cd ..
@@ -66,7 +67,7 @@ cd backend
 go run .
 ```
 
-后端默认读取当前目录下的 `config.yaml`，监听 `http://localhost:16101`。首次启动会在 `backend/data/` 创建 SQLite 数据库，并在 `backend/log/` 生成按等级拆分和轮转的 Zap 日志。
+后端默认读取当前目录下的 `config.yaml`，连接其中启用的 MySQL 数据库并监听 `http://localhost:16101`。数据库需提前创建；首次启动会自动建表并写入默认管理员账号。Zap 日志会写入 `backend/log/`。
 
 部署时可用 `EXPORT_CONFIG_FILE` 指定其他配置文件，无需复制为默认文件名：
 
@@ -75,7 +76,7 @@ cd backend
 EXPORT_CONFIG_FILE=/path/to/production.yaml go run .
 ```
 
-配置在启动阶段完成校验；端口、运行模式、数据库路径、JWT 配置或跨域来源无效时，服务会直接拒绝启动。
+配置在启动阶段完成校验；端口、运行模式、MySQL 连接参数、JWT 配置或跨域来源无效时，服务会直接拒绝启动。
 
 ### 3. 启动前端
 
@@ -149,8 +150,8 @@ nginx -s reload
 
 ### 5. 通过 CI 部署后端可执行程序
 
-后端 workflow 在本机 Mac self-hosted Runner 上运行测试，并使用 Zig 将依赖 CGO/SQLite
-的 Go 后端交叉编译为静态 Linux ARM64 可执行文件。随后 CI 将成品上传到
+后端 workflow 在本机 Mac self-hosted Runner 上运行测试，并将不依赖 CGO 的 Go 后端
+交叉编译为 Linux ARM64 可执行文件。随后 CI 将成品上传到
 `dok@192.168.31.5`，由 systemd 直接运行在 `16101`。`.5` 服务器不负责编译，也不使用
 Docker。新版本健康检查失败时，CI 会恢复上一个版本。
 
@@ -163,6 +164,8 @@ Runner 使用以下私钥免密登录：
 当前 CI 不依赖 GitHub Secret。首次部署时会将 `backend/config.example.yaml` 复制到
 `/srv/personal-assistant-backend/shared/config.yaml`；后续部署不会覆盖服务器上的该文件。
 此配置中的 `jwt_secret` 仅为临时占位值，正式使用前应直接在服务器上替换。
+如果服务器已有旧配置，请在部署前将 `database.active` 改为 `mysql`，并确认对应连接参数
+有效；新版后端只接受 MySQL 配置。
 
 在 `.5` 服务器一次性准备目录：
 

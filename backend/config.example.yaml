@@ -4,12 +4,9 @@ port: "16101"
 mode: release
 
 database:
-  active: sqlite
+  active: mysql
 
 database_connections:
-  sqlite:
-    driver: sqlite
-    path: data/personal-assistant.db
   mysql:
     driver: mysql
     host: 127.0.0.1
@@ -18,10 +15,6 @@ database_connections:
     password: replace-with-database-password
     name: personal_assistant
     charset: utf8mb4
-  test_memory:
-    driver: sqlite
-    path: ":memory:"
-
 # Replace this value before a production deployment.
 jwt_secret: replace-this-with-a-long-random-secret
 jwt_expire_hours: 24
