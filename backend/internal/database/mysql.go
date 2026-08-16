@@ -22,14 +22,16 @@ func connectMySQL(cfg config.DatabaseConnectionConfig) (*gorm.DB, error) {
 // 参数 cfg 包含服务器、账户及数据库信息；返回支持特殊字符转义的 MySQL DSN。
 func mysqlDSN(cfg config.DatabaseConnectionConfig) string {
 	dsnConfig := mysqlDriver.Config{
-		User:      cfg.Username,
-		Passwd:    cfg.Password,
-		Net:       "tcp",
-		Addr:      net.JoinHostPort(cfg.Host, strconv.Itoa(cfg.Port)),
-		DBName:    cfg.Name,
-		Params:    map[string]string{"charset": cfg.Charset},
-		ParseTime: true,
-		Loc:       time.Local,
+		User:                 cfg.Username,
+		Passwd:               cfg.Password,
+		Net:                  "tcp",
+		Addr:                 net.JoinHostPort(cfg.Host, strconv.Itoa(cfg.Port)),
+		DBName:               cfg.Name,
+		Params:               map[string]string{"charset": cfg.Charset},
+		ParseTime:            true,
+		Loc:                  time.Local,
+		// 兼容仍使用 mysql_native_password 插件的现有数据库账户。
+		AllowNativePasswords: true,
 	}
 	return dsnConfig.FormatDSN()
 }
