@@ -9,6 +9,7 @@ import (
 	"gorm.io/gorm"
 
 	"personal_assistant_server/internal/config"
+	"personal_assistant_server/internal/finance"
 	"personal_assistant_server/internal/model"
 	"personal_assistant_server/internal/task"
 )
@@ -27,7 +28,14 @@ func MigrateAndSeed(db *gorm.DB) error {
 		return err
 	}
 	hadTaskTypeColumn := db.Migrator().HasTable(&task.Task{}) && db.Migrator().HasColumn(&task.Task{}, "task_type")
-	if err := db.AutoMigrate(&model.User{}, &task.TaskList{}, &task.Task{}); err != nil {
+	if err := db.AutoMigrate(
+		&model.User{}, &task.TaskList{}, &task.Task{},
+		&finance.FinancialAccount{}, &finance.BalanceSnapshot{},
+		&finance.TransactionCategory{}, &finance.Transaction{},
+		&finance.CreditCard{}, &finance.Loan{}, &finance.Mortgage{},
+		&finance.MortgagePaymentSchedule{}, &finance.RecurringTransaction{},
+		&finance.Budget{}, &finance.FinancialGoal{},
+	); err != nil {
 		return err
 	}
 	// 历史接口曾使用 parent_id = 0 表示顶级任务，而当前模型使用 NULL。

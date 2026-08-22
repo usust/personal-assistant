@@ -3,6 +3,7 @@ package router
 import (
 	"github.com/gin-gonic/gin"
 
+	"personal_assistant_server/internal/finance"
 	"personal_assistant_server/internal/handler"
 	"personal_assistant_server/internal/middleware"
 	"personal_assistant_server/internal/service"
@@ -29,6 +30,7 @@ func registerRoutes(
 	authService *service.Auth,
 	taskHandler *taskhandler.Handler,
 	taskListHandler *tasklisthandler.Handler,
+	financeHandler *finance.Handler,
 ) {
 	// 注册无需身份认证即可访问的公开业务接口。
 	registerPublicRoutes(api, authHandler)
@@ -37,4 +39,5 @@ func registerRoutes(
 	protected.Use(middleware.Auth(authService))
 	tasklistroutes.RegisterRoutes(protected, taskListHandler)
 	taskroutes.RegisterRoutes(protected, taskHandler)
+	finance.RegisterRoutes(protected, financeHandler)
 }

@@ -20,12 +20,16 @@ Desktop.ini
 *.log
 logs/
 
-# Frontend (Node.js / Vite)
+# Node.js / Vite (the actual app and lockfile live under frontend/)
+/node_modules/
+/package-lock.json
 frontend/node_modules/
 frontend/dist/
 frontend/.vite/
 frontend/.cache/
 frontend/coverage/
+frontend/test-results/
+frontend/playwright-report/
 frontend/*.tsbuildinfo
 frontend/npm-debug.log*
 frontend/yarn-debug.log*
@@ -54,4 +58,8 @@ backend/*.db-wal
 backend/*.sqlite
 backend/*.sqlite3
 
+# Test source files
 **/*_test.go
+**/*.test.*
+**/*.spec.*
+**/__tests__/

@@ -7,6 +7,7 @@ import (
 	"gorm.io/gorm"
 
 	"personal_assistant_server/internal/config"
+	"personal_assistant_server/internal/finance"
 	"personal_assistant_server/internal/handler"
 	"personal_assistant_server/internal/middleware"
 	"personal_assistant_server/internal/response"
@@ -47,12 +48,14 @@ func New(db *gorm.DB, cfg *config.Config) *gin.Engine {
 	captchaService := service.NewCaptcha()
 	taskService := taskservice.New(db)
 	taskListService := tasklistservice.New(db)
+	financeService := finance.NewService(db)
 
 	// 创建认证 HTTP 处理器，并注入认证服务；处理器负责解析请求参数、调用认证业务逻辑，
 	// 再将业务执行结果转换为统一的 HTTP JSON 响应。
 	authHandler := handler.NewAuth(authService, captchaService)
 	taskHandler := taskhandler.New(taskService)
 	taskListHandler := tasklisthandler.New(taskListService)
+	financeHandler := finance.NewHandler(financeService)
 
 	// 健康检查不依赖数据库业务逻辑和用户认证，直接注册在基础 API 路由组中。
 	api := engine.Group("/api")
@@ -66,6 +69,6 @@ func New(db *gorm.DB, cfg *config.Config) *gin.Engine {
 	})
 
 	// 集中注册依赖业务服务的公开接口和受保护接口。
-	registerRoutes(api, authHandler, authService, taskHandler, taskListHandler)
+	registerRoutes(api, authHandler, authService, taskHandler, taskListHandler, financeHandler)
 	return engine
 }

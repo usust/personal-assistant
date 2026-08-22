@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { useRoute, useRouter } from 'vue-router'
-import { Calendar, House, List, Setting, SwitchButton } from '@element-plus/icons-vue'
+import { Calendar, House, List, Setting, SwitchButton, Wallet } from '@element-plus/icons-vue'
 import { useAuthStore } from '@/stores/auth'
 
 const route = useRoute()
@@ -21,6 +21,7 @@ function logout() {
         <el-menu-item index="/"><el-icon><House /></el-icon><span>工作台</span></el-menu-item>
         <el-menu-item index="/calendar"><el-icon><Calendar /></el-icon><span>日历</span></el-menu-item>
         <el-menu-item index="/tasks"><el-icon><List /></el-icon><span>任务清单</span></el-menu-item>
+        <el-menu-item index="/finance"><el-icon><Wallet /></el-icon><span>财务管理</span></el-menu-item>
         <el-menu-item index="/settings"><el-icon><Setting /></el-icon><span>系统设置</span></el-menu-item>
       </el-menu>
       <button class="logout-button" type="button" @click="logout">
